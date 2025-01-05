@@ -1,0 +1,66 @@
+name: Build, Check, and Upload Wheels
+
+on:
+#   push:
+#     branches:
+#       - main
+  pull_request:
+  workflow_dispatch: 
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # strategy:
+    #   matrix:
+    #     python-version: [3.8, 3.9, 3.10, 3.11]  # Easily configurable Python versions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10 #${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10 #${{ matrix.python-version }}
+
+      - name: Install Build Tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build pyc_wheel twine
+
+      - name: Build Wheel
+        run: python -m build
+
+      - name: Precompile Wheel with pyc_wheel
+        run: python -m pyc_wheel dist/*.whl
+
+      - name: Check Wheel Metadata with Twine
+        run: python -m twine check dist/*
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-310 #${{ matrix.python-version }}
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Combine Wheels into a Single Directory
+        run: |
+          mkdir -p combined_dist
+          rsync -av dist/*/ combined_dist/
+
+      - name: List All Files
+        run: find combined_dist/
+
